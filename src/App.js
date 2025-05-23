@@ -17,14 +17,17 @@ function App() {
   const selectedDateKey = selectedDate.toISOString().split("T")[0];
   const habits = habitsByDate[selectedDateKey] || [];
 
+  // Save habitsByDate to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("habitsByDate", JSON.stringify(habitsByDate));
   }, [habitsByDate]);
 
+  // Save streak to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("streak", JSON.stringify(streak));
   }, [streak]);
 
+  // Initialize habits for the selected day
   useEffect(() => {
     if (!habitsByDate[selectedDateKey]) {
       const previousDateKey = new Date(selectedDate);
@@ -36,16 +39,17 @@ function App() {
       const previousHabits = habitsByDate[formattedPreviousDateKey] || [];
       const resetHabits = previousHabits.map((habit) => ({
         ...habit,
-        completed: false,
+        completed: false, // Reset completed status for the new day
       }));
 
       setHabitsByDate((prev) => ({
         ...prev,
-        [selectedDateKey]: resetHabits,
+        [selectedDateKey]: prev[selectedDateKey] || resetHabits,
       }));
     }
   }, [selectedDate, habitsByDate, selectedDateKey]);
 
+  // Calculate streak based on completed habits
   const calculateStreak = useCallback(() => {
     let currentStreak = 0;
     const sortedDates = Object.keys(habitsByDate).sort(
@@ -71,45 +75,45 @@ function App() {
     calculateStreak();
   }, [habitsByDate, calculateStreak]);
 
+  // Add a new habit
   function handleAddHabit(habit) {
     setHabitsByDate((prev) => {
       const updatedHabitsByDate = { ...prev };
 
-      Object.keys(updatedHabitsByDate).forEach((dateKey) => {
-        if (new Date(dateKey) >= new Date(selectedDateKey)) {
-          updatedHabitsByDate[dateKey] = [
-            ...(updatedHabitsByDate[dateKey] || []),
-            { text: habit, completed: false },
-          ];
-        }
-      });
-
       if (!updatedHabitsByDate[selectedDateKey]) {
-        updatedHabitsByDate[selectedDateKey] = [
-          { text: habit, completed: false },
-        ];
+        updatedHabitsByDate[selectedDateKey] = [];
+      }
+
+      // Prevent duplicate habits
+      if (
+        !updatedHabitsByDate[selectedDateKey].some(
+          (existingHabit) => existingHabit.text === habit
+        )
+      ) {
+        updatedHabitsByDate[selectedDateKey].push({
+          text: habit,
+          completed: false,
+        });
       }
 
       return updatedHabitsByDate;
     });
   }
 
+  // Delete a habit
   function handleDeleteHabit(indexToDelete) {
     setHabitsByDate((prev) => {
       const updatedHabitsByDate = { ...prev };
 
-      Object.keys(updatedHabitsByDate).forEach((dateKey) => {
-        if (new Date(dateKey) >= new Date(selectedDateKey)) {
-          updatedHabitsByDate[dateKey] = updatedHabitsByDate[dateKey].filter(
-            (_, index) => index !== indexToDelete
-          );
-        }
-      });
+      updatedHabitsByDate[selectedDateKey] = updatedHabitsByDate[
+        selectedDateKey
+      ].filter((_, index) => index !== indexToDelete);
 
       return updatedHabitsByDate;
     });
   }
 
+  // Toggle habit completion
   function handleToggleComplete(index) {
     setHabitsByDate((prev) => ({
       ...prev,
@@ -119,6 +123,7 @@ function App() {
     }));
   }
 
+  // Export habits and streak to a file
   function handleExport() {
     const data = JSON.stringify({ habitsByDate, streak });
     const blob = new Blob([data], { type: "application/json" });
@@ -129,6 +134,7 @@ function App() {
     link.click();
   }
 
+  // Import habits and streak from a file
   function handleImport(event) {
     const file = event.target.files[0];
     const reader = new FileReader();
@@ -140,9 +146,22 @@ function App() {
     reader.readAsText(file);
   }
 
+  // Reset all data
+  function handleReset() {
+    setHabitsByDate({});
+    setStreak(0);
+    setSelectedDate(new Date());
+    localStorage.removeItem("habitsByDate");
+    localStorage.removeItem("streak");
+  }
+
   return (
     <div className="app">
-      <Header onExport={handleExport} onImport={handleImport} />
+      <Header
+        onExport={handleExport}
+        onImport={handleImport}
+        onReset={handleReset}
+      />
       <div className="content">
         <div className="left">
           <UserProfile
@@ -169,7 +188,7 @@ function App() {
   );
 }
 
-function Header({ onExport, onImport }) {
+function Header({ onExport, onImport, onReset }) {
   return (
     <header className="header">
       <h1 style={{ fontFamily: "Blisey" }}>Habiter</h1>
@@ -207,6 +226,20 @@ function Header({ onExport, onImport }) {
             onChange={onImport}
           />
         </label>
+        <button
+          onClick={onReset}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#f44336",
+            color: "white",
+            border: "none",
+            borderRadius: "5px",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          Reset
+        </button>
       </div>
     </header>
   );
@@ -282,7 +315,9 @@ function UserProfile({ habits, streak, selectedDate }) {
       <p>
         Completed today: {completedHabits} out of {totalHabits}
       </p>
-      <p>Streak: {streak} days</p>
+      <p>
+        Streak: {streak > 0 ? `${streak} days` : "No streak yet. Start today!"}
+      </p>
     </div>
   );
 }
